@@ -1,0 +1,7 @@
+﻿{
+  "python.envFile": "${workspaceFolder}/.env",
+  "python.testing.pytestEnabled": true,
+  "python.testing.pytestArgs": ["tests"],
+  "python.testing.cwd": "${workspaceFolder}",
+  "python.analysis.extraPaths": ["${workspaceFolder}/src"]
+}

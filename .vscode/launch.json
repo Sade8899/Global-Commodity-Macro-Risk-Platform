@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run FRED print test",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/tests/test_fred_ingestion.py",
+      "console": "integratedTerminal",
+      "envFile": "${workspaceFolder}/.env"
+    }
+  ]
+}

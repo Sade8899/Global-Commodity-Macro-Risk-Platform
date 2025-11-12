@@ -30,3 +30,17 @@ This project is actively in development.
 Current Focus: Building the Python backend for data ingestion and establishing the database schema in PostgreSQL.
 
 Next Steps: Develop the analytical functions for correlation modeling and build the API endpoints to serve data to the frontend dashboard.
+
+
+# Global-Commodity-Macro-Risk-Platform (skeleton)
+
+Quickstart skeleton for a Python backend that ingests commodity price data,
+stores it (SQLite/Postgres), computes basic analytics, and exposes a tiny API.
+
+## Quickstart
+python -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt
+export PYTHONPATH=src
+python -m gcmrp.jobs.backfill --commodities wheat coffee sugar --days 90
+uvicorn gcmrp.api.main:app --reload
+
