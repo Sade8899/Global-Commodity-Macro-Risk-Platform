@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 import os
 import requests
 import pandas as pd
@@ -13,23 +13,46 @@ FRED_SERIES = {
     "cocoa": "PCOCOUSDM"
 }
 
-def fetch_fred_series(commodity: str, start_date: str = "2000-01-01") -> pd.DataFrame:
-    if commodity not in FRED_SERIES:
-        raise ValueError(f"Unsupported commodity: {commodity}")
-    series_id = FRED_SERIES[commodity]
+def fetch_fred_series(
+    commodity: str,
+    start_date: str = '2000-01-01',
+    *,
+    series_id: str | None = None,
+    frequency: str | None = None,            # 'd','w','m','q','a' (must not exceed original series frequency)
+    aggregation_method: str = 'eop'          # for frequency conversion
+) -> pd.DataFrame:
+    """Fetch a FRED series for a commodity.
+
+    If the original series is monthly, setting frequency='d' does NOT create true daily data;
+    FRED will only convert frequency (e.g., step-style values using aggregation_method).
+    For real daily data, pass a true daily series_id via --series-overrides.
+    """
+    if commodity not in FRED_SERIES and not series_id:
+        raise ValueError(f'Unsupported commodity: {commodity}')
+    sid = series_id or FRED_SERIES[commodity]
+
     params = {
-        "api_key": FRED_API_KEY,
-        "file_type": "json",
-        "series_id": series_id,
-        "observation_start": start_date
+        'api_key': FRED_API_KEY,
+        'file_type': 'json',
+        'series_id': sid,
+        'observation_start': start_date,
     }
-    r = requests.get(FRED_BASE_URL, params=params)
+    if frequency:
+        params['frequency'] = frequency
+        if aggregation_method:
+            params['aggregation_method'] = aggregation_method
+
+    r = requests.get(FRED_BASE_URL, params=params, timeout=30)
     r.raise_for_status()
-    obs = r.json()["observations"]
+    obs = r.json().get('observations', [])
     df = pd.DataFrame(obs)
-    df["date"] = pd.to_datetime(df["date"])
-    df["value"] = pd.to_numeric(df["value"], errors="coerce")
-    df = df.dropna(subset=["value"])
-    df = df.rename(columns={"value": "close"})
-    return df[["date", "close"]]
+    if df.empty:
+        return pd.DataFrame(columns=['date','close'])
+    df['date'] = pd.to_datetime(df['date'])
+    df['value'] = pd.to_numeric(df['value'], errors='coerce')
+    df = df.dropna(subset=['value']).rename(columns={'value': 'close'})
+    return df[['date','close']]
+
+from gcmrp.config import get_settings
+FRED_API_KEY = os.getenv("FRED_API_KEY") or (get_settings().fred_api_key or "")
 

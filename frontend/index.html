@@ -1,0 +1,148 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>GCMRP Dashboard</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 24px; max-width: 1100px; }
+    header { display:flex; gap:12px; align-items:center; flex-wrap: wrap; margin-bottom: 16px; }
+    select, button, input { padding: 8px 10px; }
+    .row { display:grid; grid-template-columns: 1fr; gap: 24px; }
+    @media (min-width: 900px) { .row { grid-template-columns: 1fr 1fr; } }
+    .card { padding:16px; border:1px solid #e6e6e6; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,.04) }
+    canvas { width:100%; height:360px; }
+    #err { color:#b00020; margin: 8px 0 16px; display:none; }
+    .controls { display:flex; gap:10px; align-items:center; }
+    .checks { display:flex; gap:10px; align-items:center; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header>
+    <h2 style="margin:0;">Global-Commodity-Macro-Risk-Platform</h2>
+    <div class="controls" style="margin-left:auto;">
+      <label>Commodity:</label>
+      <select id="sym">
+        <option value="wheat">Wheat</option>
+        <option value="coffee">Coffee</option>
+        <option value="cocoa">Cocoa</option>
+      </select>
+
+      <label>Days:</label>
+      <select id="days">
+        <option value="90">90</option>
+        <option value="180">180</option>
+        <option value="365" selected>365</option>
+      </select>
+
+      <label>Vol window:</label>
+      <input id="win" type="number" min="5" max="120" step="1" value="30" style="width:72px" />
+      <button id="refresh">Refresh</button>
+    </div>
+    <div class="checks" style="width:100%;">
+      <label>Compare:</label>
+      <label><input type="checkbox" class="cmp" value="wheat" checked> Wheat</label>
+      <label><input type="checkbox" class="cmp" value="coffee"> Coffee</label>
+      <label><input type="checkbox" class="cmp" value="cocoa"> Cocoa</label>
+      <small style="opacity:.7">(Overlays price; right panel shows primary symbol's volatility)</small>
+    </div>
+  </header>
+
+  <div id="err"></div>
+
+  <div class="row">
+    <div class="card">
+      <h3 style="margin-top:0;">Price</h3>
+      <canvas id="price"></canvas>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0;">Rolling Volatility</h3>
+      <canvas id="vol"></canvas>
+    </div>
+  </div>
+
+  <script>
+    const base = location.origin;
+    const symSel = document.getElementById('sym');
+    const daysSel = document.getElementById('days');
+    const winInp = document.getElementById('win');
+    const btn = document.getElementById('refresh');
+    const errBox = document.getElementById('err');
+    const cmpChecks = Array.from(document.querySelectorAll('.cmp'));
+
+    const priceCtx = document.getElementById('price').getContext('2d');
+    const volCtx = document.getElementById('vol').getContext('2d');
+    let priceChart, volChart;
+
+    function showErr(msg) { console.error(msg); errBox.textContent = "⚠ " + msg; errBox.style.display = 'block'; }
+    function clearErr() { errBox.textContent = ""; errBox.style.display = 'none'; }
+    async function fetchJSON(url) { const r = await fetch(url, { cache:"no-store" }); if (!r.ok) throw new Error(`HTTP ${r.status} for ${url}`); return r.json(); }
+
+    function ensureChart(ctx, label) {
+      return new Chart(ctx, {
+        type: 'line',
+        data: { labels: [], datasets: [] },
+        options: { responsive:true, interaction:{mode:'index',intersect:false}, animation:false,
+          plugins: { legend: { display: true } },
+          scales: { x: { ticks:{ maxRotation:0, autoSkip:true, maxTicksLimit:8 } } }
+        }
+      });
+    }
+
+    function setPriceDatasets(chart, series) {
+      chart.data.labels = series.labels;
+      chart.data.datasets = series.lines.map(l => ({
+        label: l.label, data: l.data, pointRadius:0
+      }));
+      chart.update();
+    }
+    function setVolDataset(chart, labels, data, label) {
+      chart.data.labels = labels;
+      chart.data.datasets = [{ label, data, pointRadius:0 }];
+      chart.update();
+    }
+
+    async function load() {
+      clearErr();
+      const sym = symSel.value;
+      const days = Number(daysSel.value);
+      const win = Number(winInp.value);
+      // Build compare list (at least one)
+      let selected = cmpChecks.filter(c => c.checked).map(c => c.value);
+      if (selected.length === 0) selected = [sym]; // fallback
+
+      // Fetch overlay prices
+      let multi;
+      try {
+        const qs = new URLSearchParams({ symbols: selected.join(','), window: String(win), days: String(days) }).toString();
+        multi = await fetchJSON(`${base}/api/dash-data-multi?${qs}`);
+      } catch (e) { showErr("Compare fetch failed: " + e.message); return; }
+
+      // Build price overlays (aligned by date labels of primary symbol)
+      const primary = multi[sym] || { prices: [], vol: [] };
+      const labels = (primary.prices || []).map(p => p.date);
+      const lines = selected.map(s => {
+        const arr = (multi[s]?.prices || []);
+        const map = new Map(arr.map(p => [p.date, p.close]));
+        const aligned = labels.map(d => map.get(d) ?? null);
+        return { label: `${s} price`, data: aligned };
+      });
+
+      if (!priceChart) priceChart = ensureChart(priceCtx, "price");
+      setPriceDatasets(priceChart, { labels, lines });
+
+      // Vol for primary symbol only
+      const volArr = (primary.vol || []);
+      const vLabels = volArr.map(v => v.date);
+      const vData = volArr.map(v => v.vol);
+      if (!volChart) volChart = ensureChart(volCtx, "vol");
+      setVolDataset(volChart, vLabels, vData, `${sym} vol (${win}d)`);
+    }
+
+    btn.addEventListener('click', () => load().catch(e => showErr(e.message)));
+    [symSel, daysSel, winInp, ...cmpChecks].forEach(el => el.addEventListener('change', () => load().catch(e => showErr(e.message))));
+    window.addEventListener('DOMContentLoaded', () => load().catch(e => showErr(e.message)));
+  </script>
+</body>
+</html>

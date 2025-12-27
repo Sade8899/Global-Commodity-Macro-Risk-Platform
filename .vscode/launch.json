@@ -1,13 +1,18 @@
-{
+﻿{
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Run FRED print test",
+      "name": "Run API (uvicorn)",
       "type": "python",
       "request": "launch",
-      "program": "${workspaceFolder}/tests/test_fred_ingestion.py",
-      "console": "integratedTerminal",
-      "envFile": "${workspaceFolder}/.env"
+      "module": "uvicorn",
+      "args": ["gcmrp.api.main:app", "--reload", "--app-dir", "/src"],
+      "env": {
+        "PYTHONPATH": "/src",
+        "FRED_API_KEY": ""
+      },
+      "cwd": "",
+      "console": "integratedTerminal"
     }
   ]
 }
