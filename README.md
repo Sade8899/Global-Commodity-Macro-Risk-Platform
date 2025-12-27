@@ -38,7 +38,18 @@ Quickstart skeleton for a Python backend that ingests commodity price data,
 stores it (SQLite/Postgres), computes basic analytics, and exposes a tiny API.
 
 ## Quickstart
-python -m venv .venv && . .venv/bin/activate
+
+Windows (PowerShell)
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+$env:PYTHONPATH="src"
+python -m gcmrp.jobs.backfill --commodities wheat coffee sugar --days 90
+uvicorn gcmrp.api.main:app --reload
+
+macOS/Linux
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 export PYTHONPATH=src
 python -m gcmrp.jobs.backfill --commodities wheat coffee sugar --days 90
